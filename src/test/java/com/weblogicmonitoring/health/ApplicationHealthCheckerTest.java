@@ -1,4 +1,4 @@
-package com.weblogicmonitoring;
+package com.weblogicmonitoring.health;
 
 import org.junit.Test;
 import org.junit.runner.RunWith;
@@ -23,15 +23,11 @@ public class ApplicationHealthCheckerTest {
 
     @Autowired
     private MockMvc mvc;
-    
+
     @Test
     public void isApplicationRunning_returnsOkMessage() throws Exception {
         mvc.perform(MockMvcRequestBuilders.get("/webmon").accept(MediaType.APPLICATION_JSON))
                 .andExpect(status().isOk())
                 .andExpect(content().string(equalTo("Weblogic Monitoring application is running!")));
     }
-
-
-
-
 }

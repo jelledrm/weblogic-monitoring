@@ -29,7 +29,7 @@ public class ApplicationHealthCheckerIntergrationTest {
 
     @Before
     public void setUp() throws Exception {
-        this.base = new URL("http://localhost:" + port + "/");
+        this.base = new URL("http://localhost:" + port + "/webmon");
     }
 
     @Test
@@ -37,5 +37,4 @@ public class ApplicationHealthCheckerIntergrationTest {
         ResponseEntity<String> response = template.getForEntity(base.toString(), String.class);
         assertThat(response.getBody(), equalTo("Weblogic Monitoring application is running!"));
     }
-
 }

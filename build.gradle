@@ -1,22 +1,23 @@
 apply plugin: 'java'
 apply plugin: 'idea'
-apply plugin: 'spring-boot'
-apply plugin: 'docker'
+apply plugin: 'org.springframework.boot'
+apply plugin: 'com.bmuschko.docker-remote-api'
 
 sourceCompatibility = 1.8
 targetCompatibility = 1.8
 
 buildscript {
 	ext {
-		springBootVersion = '1.4.1.RELEASE'
-		gradleDockerPluginVersion = '1.2'
+		springBootVersion = '1.5.2.RELEASE'
+		springBootCamelVersion = '2.18.3'
 	}
 	repositories {
 		mavenCentral()
+		jcenter()
 	}
 	dependencies {
 		classpath("org.springframework.boot:spring-boot-gradle-plugin:${springBootVersion}")
-		classpath("se.transmode.gradle:gradle-docker:${gradleDockerPluginVersion}")
+		classpath 'com.bmuschko:gradle-docker-plugin:3.0.6'
 	}
 }
 
@@ -30,20 +31,73 @@ repositories {
 }
 
 dependencies {
-	compile('org.apache.camel:camel-spring-boot-starter:2.17.3')
-	compile("org.springframework.boot:spring-boot-starter-web")
-	testCompile('org.springframework.boot:spring-boot-starter-test')
+	compile("org.apache.camel:camel-spring-boot-starter:${springBootCamelVersion}")
+	compile("org.springframework.boot:spring-boot-starter-web:${springBootVersion}")
+	testCompile("org.springframework.boot:spring-boot-starter-test:${springBootVersion}")
 }
 
-task buildDocker(type: Docker, dependsOn: build) {
-	push = false
-	applicationName = jar.baseName + "-" + jar.version.toLowerCase()
-	dockerfile = file('src/main/docker/Dockerfile')
-	doFirst {
+import com.bmuschko.gradle.docker.tasks.container.*
+import com.bmuschko.gradle.docker.tasks.image.*
+
+
+def IMAGE_TAG = "mon/webmon"
+def CONTAINER_NAME = "webmon"
+
+task createDockerfile(type: Dockerfile) {
+	dependsOn build
+    from('java:8')
+	exposePort(8080)
+    addFile("${jar.baseName}-${jar.version}.jar","${jar.baseName}-${jar.version}.jar")
+    runCommand("sh -c 'touch /${jar.baseName}-${jar.version}.jar'")
+    entryPoint('java','-Djava.security.egd=file:/dev/./urandom','-jar',"${jar.baseName}-${jar.version}.jar")
+}
+
+task buildImage(type: DockerBuildImage) {
+	dependsOn createDockerfile
+	setInputDir(createDockerfile.destFile.parentFile)
+	doFirst{
 		copy {
 			from jar
-			into stageDir
-			rename ("${jar.baseName}-${jar.version}.jar" , "${jar.baseName}.jar")
+			into inputDir
 		}
 	}
+	tag = IMAGE_TAG
 }
+task pushImage(type: DockerPushImage){
+	setImageName(IMAGE_TAG)
+}
+
+task removeImage(type: DockerRemoveImage){
+	setForce(true)
+	setImageId(IMAGE_TAG)
+}
+
+task createContainer(type: DockerCreateContainer) {
+	dependsOn buildImage
+	targetImageId {
+		buildImage.getImageId()
+	}
+	setContainerName(CONTAINER_NAME)
+	portBindings = ['8083:8080']
+	finalizedBy 'removeImage'
+}
+
+task startContainer(type: DockerStartContainer) {
+	dependsOn createContainer
+	targetContainerId {
+		createContainer.getContainerId()
+	}
+}
+
+task stopContainer(type: DockerStopContainer) {
+	targetContainerId {CONTAINER_NAME}
+	finalizedBy 'removeContainer'
+}
+
+task removeContainer(type: DockerRemoveContainer) {
+	removeVolumes = true;
+	targetContainerId {CONTAINER_NAME}
+}
+
+
+

@@ -25,8 +25,6 @@ jobs:
             tag: 8u121-jdk
         inputs:
         - name: webmon-git
-        outputs:
-        - name: webmon-build
         run:
           path: sh
           args:
@@ -39,13 +37,11 @@ jobs:
 
  - name:  Push image to artifactory
    plan: 
-   - get: webmon-build
+   - get: webmon-git
      passed:
        - Build webmon
    - task: push image
      config:
-        inputs: 
-        - name : webmon-build
         run:
           path: sh
           args:

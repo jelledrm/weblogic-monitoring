@@ -1,9 +1,3 @@
-resource_types:
-- name: artifactory
-  type: docker-image
-  source:
-    repository: pivotalservices/artifactory-resource
-
 resources:
 - name: webmon-git
   type: git
@@ -11,8 +5,18 @@ resources:
     branch: master
     uri: https://github.com/jelledrm/weblogic-monitoring.git
 
+- name: webmon-image
+  type: docker-image
+  source:
+    email: jelle2510@gmail.com
+    repository: docker.artifactory:80/webmon
+    username: admin
+    password: admin
+    insecure_registries:
+    - docker.artifactory:80
+
 jobs:
- - name: Build webmon
+ - name: build-webmon
    plan:
    - get: webmon-git
    - task : Build Code
@@ -25,6 +29,8 @@ jobs:
             tag: 8u121-jdk
         inputs:
         - name: webmon-git
+        outputs:
+        - name: webmon-build-output
         run:
           path: sh
           args:
@@ -33,30 +39,25 @@ jobs:
               export TERM=dumb
               cd webmon-git
               chmod +x gradlew
-              ./gradlew build
-
- - name:  Push image to artifactory
-   plan: 
-   - get: webmon-git
-     passed:
-       - Build webmon
-   - task: push image
+              ./gradlew createDockerfile
+              cp build/docker/Dockerfile ../webmon-build-output
+              cp build/libs/weblogic-monitoring-0.0.1-SNAPSHOT.jar ../webmon-build-output
+   - task: push-to-artifactory
      config:
         platform: linux
         image_resource:
           type: docker-image
           source:
-            repository: openjdk
-            tag: 8u121-jdk
+            repository: busybox
         inputs:
-        - name: webmon-git
+        - name: webmon-build-output
         run:
           path: sh
           args:
             - -exc
             - |
-              cd webmon-git
-              ls 
-
-
+              ls -R
+   - put: webmon-image
+     params:
+      build: ./webmon-build-output
 

@@ -63,6 +63,7 @@ jobs:
  - name: deploy-to-integration
    plan:
    - get: webmon-git
+     passed: [build-webmon]
    - task: Deploy container to TEST
      config:
         platform: linux

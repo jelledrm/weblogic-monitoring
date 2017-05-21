@@ -112,9 +112,7 @@ task removeContainer(type: DockerRemoveContainer) {
 	targetContainerId {CONTAINER_NAME}
 }
 
-
-// Tasks to deploy to test (todo: Use "test" server)
-
+// Tasks to deploy to test
 
 task removeImageForTest(type: DockerRemoveImage){
 	setForce(true)

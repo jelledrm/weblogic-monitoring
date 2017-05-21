@@ -19,6 +19,7 @@ jobs:
  - name: build-webmon
    plan:
    - get: webmon-git
+     trigger: true
    - task : Build Code
      config:
         platform: linux
@@ -64,6 +65,7 @@ jobs:
    plan:
    - get: webmon-git
      passed: [build-webmon]
+     trigger: true
    - task: Deploy container to TEST
      config:
         platform: linux

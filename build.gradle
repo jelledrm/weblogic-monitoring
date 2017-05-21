@@ -1,15 +1,8 @@
-apply plugin: 'java'
-apply plugin: 'idea'
-apply plugin: 'org.springframework.boot'
-apply plugin: 'com.bmuschko.docker-remote-api'
-
-sourceCompatibility = 1.8
-targetCompatibility = 1.8
-
 buildscript {
 	ext {
 		springBootVersion = '1.5.2.RELEASE'
 		springBootCamelVersion = '2.18.3'
+		dockerPlugVerion = "3.0.7"
 	}
 	repositories {
 		mavenCentral()
@@ -17,13 +10,21 @@ buildscript {
 	}
 	dependencies {
 		classpath("org.springframework.boot:spring-boot-gradle-plugin:${springBootVersion}")
-		classpath 'com.bmuschko:gradle-docker-plugin:3.0.6'
+		classpath "com.bmuschko:gradle-docker-plugin:${dockerPlugVerion}"
 	}
 }
 
+apply plugin: "java"
+apply plugin: "idea"
+apply plugin: "org.springframework.boot"
+apply plugin: "com.bmuschko.docker-remote-api"
+
+sourceCompatibility = 1.8
+targetCompatibility = 1.8
+
 jar {
-	baseName = 'weblogic-monitoring'
-	version = '0.0.1-SNAPSHOT'
+	baseName = "weblogic-monitoring"
+	version = "0.0.1-SNAPSHOT"
 }
 
 repositories {
@@ -39,8 +40,17 @@ dependencies {
 import com.bmuschko.gradle.docker.tasks.container.*
 import com.bmuschko.gradle.docker.tasks.image.*
 
+
 docker {
 
+	url = 'tcp://192.168.0.142:2376'
+	certPath = new File(System.properties['user.home'], '.docker/machine/certs/')
+
+	registryCredentials {
+		url = 'http://docker.artifactory:80/webmon/'
+		username = 'admin'
+		password = 'admin'
+	}
 }
 
 def IMAGE_TAG = "docker.artifactory/webmon"
@@ -48,11 +58,11 @@ def CONTAINER_NAME = "webmon"
 
 task createDockerfile(type: Dockerfile) {
 	dependsOn build
-    from('java:8-jdk-alpine')
+    from("openjdk:8-jdk-alpine")
 	exposePort(8080)
     addFile("${jar.baseName}-${jar.version}.jar","${jar.baseName}-${jar.version}.jar")
     runCommand("sh -c 'touch /${jar.baseName}-${jar.version}.jar'")
-    entryPoint('java','-Djava.security.egd=file:/dev/./urandom','-jar',"${jar.baseName}-${jar.version}.jar")
+    entryPoint("java","-Djava.security.egd=file:/dev/./urandom","-jar","${jar.baseName}-${jar.version}.jar")
 }
 
 task buildImage(type: DockerBuildImage) {
@@ -103,4 +113,55 @@ task removeContainer(type: DockerRemoveContainer) {
 }
 
 
+// Tasks to deploy to test (todo: Use "test" server)
+
+
+task removeImageForTest(type: DockerRemoveImage){
+	setForce(true)
+	setImageId(IMAGE_TAG)
+	onError { exception ->
+		if (!exception.message.contains('No such image'))
+			throw exception
+	}
+}
+
+task pullImageForTest(type: DockerPullImage) {
+	dependsOn removeImageForTest
+	repository = "docker.artifactory/webmon"
+}
+
+task stopContainerForTest(type: DockerStopContainer) {
+	targetContainerId {CONTAINER_NAME}
+	finalizedBy 'removeContainerForTest'
+	onError { exception ->
+		if (!exception.message.contains('No such container'))
+			throw exception
+	}
+}
+
+task removeContainerForTest(type: DockerRemoveContainer) {
+	removeVolumes = true;
+	targetContainerId {CONTAINER_NAME}
+	onError { exception ->
+		if (!exception.message.contains('No such container'))
+			throw exception
+	}
+}
+
+task createContainerForTest(type: DockerCreateContainer) {
+	dependsOn stopContainerForTest
+	dependsOn pullImageForTest
+	targetImageId {
+		"docker.artifactory/webmon"
+	}
+	setContainerName(CONTAINER_NAME)
+	portBindings = ['8083:8080']
+}
+
+task startContainerForTest(type: DockerStartContainer) {
+	dependsOn createContainerForTest
+	targetContainerId {
+		createContainerForTest.getContainerId()
+	}
+}
 
